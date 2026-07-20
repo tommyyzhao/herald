@@ -1,0 +1,15 @@
+[project]
+name = "herald"
+version = "1.0.0"
+description = "A CLI-agent Discord bot core, with an X/Twitter intel-briefing module bundled as the first example"
+requires-python = ">=3.10"
+dependencies = [
+    "discord-py>=2.4",
+    "twikit>=2.3",
+    "curl-cffi>=0.7",
+    "lxml>=5.0",
+]
+
+[tool.uv]
+# Managed entirely via `uv` — never invoke bare python3. Run scripts with
+# `uv run <path/to/script>.py`; deps sync automatically from this file.

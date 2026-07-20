@@ -1,0 +1,29 @@
+# Secrets — never commit
+.env.local
+.secrets/
+
+# uv virtual environment (uv.lock IS committed for reproducibility)
+.venv/
+
+# Every module's runtime data + logs + state. The template ships clean; if you
+# want to keep a history of your own briefings in your fork (the author's
+# private instance commits these daily), remove the relevant lines below.
+# (dir/* not dir/, so the directory itself still gets traversed and the
+# .gitkeep negations below actually take effect.)
+modules/*/reports/*
+modules/*/briefings/*
+modules/*/raw/*
+modules/*/state/*
+logs/*
+modules/*/logs/*
+
+__pycache__/
+*.pyc
+
+# Keep the directories themselves tracked
+!modules/*/reports/.gitkeep
+!modules/*/briefings/.gitkeep
+!modules/*/raw/.gitkeep
+!modules/*/state/.gitkeep
+!logs/.gitkeep
+!modules/*/logs/.gitkeep
