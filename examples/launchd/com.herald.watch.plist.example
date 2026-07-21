@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.herald.watch.viral</string>
+
+    <!-- One watcher per LaunchAgent. Copy + rename (Label and both state/log
+         paths) for each additional watcher you register. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/uv</string>
+        <string>run</string>
+        <string>core/watch_runner.py</string>
+        <string>modules/x-briefs/watchers/viral.py</string>
+        <string>modules/x-briefs/state/viral-watch.json</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/path/to/herald</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/YOUR_USERNAME</string>
+        <key>PATH</key>
+        <string>/Users/YOUR_USERNAME/.local/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- Tight interval, not clock-aligned like the distill/brief jobs — this
+         is the whole point of a watcher. StartInterval is seconds-since-last-
+         run, so it self-paces even if a run takes a while. Adjust to taste;
+         180s (3 min) is a reasonable default for a threshold check like this. -->
+    <key>StartInterval</key>
+    <integer>180</integer>
+
+    <key>StandardOutPath</key>
+    <string>/path/to/herald/logs/launchd-watch-viral.log</string>
+    <key>StandardErrorPath</key>
+    <string>/path/to/herald/logs/launchd-watch-viral.log</string>
+</dict>
+</plist>

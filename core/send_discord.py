@@ -82,20 +82,15 @@ def chunk(text, limit=LIMIT):
     return out or ["(empty briefing)"]
 
 
-def main():
-    env = load_env()
+def send(text, env=None):
+    """Post text to DISCORD_CHANNEL_ID (or DM DISCORD_DM_USER_ID as a
+    fallback), chunked to Discord's limit. The reusable primitive — both
+    main() (file-based CLI use) and core/watch_runner.py (in-memory alert
+    text, no temp file) call this."""
+    env = env if env is not None else load_env()
     token = env.get("DISCORD_BOT_TOKEN")
     if not token:
         raise SystemExit("DISCORD_BOT_TOKEN not set (.env.local)")
-
-    if len(sys.argv) < 2:
-        raise SystemExit("usage: uv run core/send_discord.py path/to/file.md")
-    path = sys.argv[1]
-    if not os.path.exists(path):
-        raise SystemExit(f"briefing not found: {path}")
-    text = open(path).read().strip()
-    if not text:
-        raise SystemExit(f"briefing empty: {path}")
 
     channel_id = env.get("DISCORD_CHANNEL_ID", "").strip()
     if not channel_id:
@@ -111,7 +106,21 @@ def main():
         api("POST", f"/channels/{channel_id}/messages", token,
             {"content": prefix + part, "flags": SUPPRESS_EMBEDS})
         time.sleep(0.4)
-    print(f"[discord] sent {len(parts)} message(s) to channel {channel_id}")
+    return len(parts)
+
+
+def main():
+    if len(sys.argv) < 2:
+        raise SystemExit("usage: uv run core/send_discord.py path/to/file.md")
+    path = sys.argv[1]
+    if not os.path.exists(path):
+        raise SystemExit(f"briefing not found: {path}")
+    text = open(path).read().strip()
+    if not text:
+        raise SystemExit(f"briefing empty: {path}")
+
+    n = send(text)
+    print(f"[discord] sent {n} message(s)")
 
 
 if __name__ == "__main__":

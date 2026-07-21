@@ -30,15 +30,20 @@ source data instead of the model's vague recollection of it.
 ```
 core/                      generic — no knowledge of any specific module
 ├── send_discord.py        deterministic delivery (never an LLM in this path)
-└── listen_discord.py      the one persistent process: Discord gateway client,
-                            drafts replies via a CLI agent (ask_codex()),
-                            grounded by prompts/reply.md
+├── listen_discord.py      the persistent Discord gateway client: drafts
+│                           replies via a CLI agent (ask_codex()), grounded
+│                           by prompts/reply.md
+└── watch_runner.py        the condition-watcher interrupt path — runs a
+                            single watcher script on a tight interval and
+                            alerts immediately on fire, bypassing whatever
+                            digest schedule the owning module runs on
 prompts/
 └── reply.md                the reply-drafting prompt; lists which module(s)'
                             data paths to ground answers in
 modules/
 └── x-briefs/               bundled example module (see below)
     ├── bin/                fetch + distill + brief + X-login scripts
+    ├── watchers/            viral.py — a working watch_runner.py example
     ├── prompts/             distill.md, brief.md
     └── reports/, briefings/, raw/, state/   its own data, gitignored
 examples/launchd/           macOS scheduler templates (adapt for cron/systemd)
@@ -105,7 +110,8 @@ module" below). Simple over clever, for now.
    bootstrap gui/$(id -u) <plist>`); on Linux, cron or systemd timers work the
    same way — `run-distill.sh` every ~30 min, `run-brief.sh` once a day,
    `listen_discord.py` as a persistent process (its plist uses `KeepAlive`
-   instead of a schedule).
+   instead of a schedule), `watch_runner.py` on a tight interval (a few
+   minutes — see "Breaking-news alerts" below).
 
 6. **Sanity check:**
    ```bash
@@ -123,6 +129,33 @@ separately and stitches back multi-part messages if the original briefing got
 split across Discord's 2000-char limit), builds a transcript, and drafts an
 answer grounded in that + whatever module data `prompts/reply.md` points at.
 
+## Breaking-news alerts (watchers)
+
+Distill/brief run on a fixed clock — fine for routine signal, wrong for
+anything urgent. A **watcher** is the escape hatch: a small deterministic
+script (no CLI agent call, no network access of its own) that `core/
+watch_runner.py` runs on a tight interval, compares against its own prior
+state, and — only on a real change, not every tick — returns a message that
+gets posted to Discord *immediately*, pinging you, independent of the
+digest schedule.
+
+`modules/x-briefs/watchers/viral.py` is a working example: it looks at the
+most recent fetch for anything crossing a very high engagement bar that
+hasn't already been alerted on, and fires only then. Try it:
+
+```bash
+uv run core/watch_runner.py modules/x-briefs/watchers/viral.py modules/x-briefs/state/viral-watch.json
+```
+
+Writing your own watcher: it's just a script that reads its prior state as
+JSON from stdin and prints `{"fire": bool, "message": string|null, "state":
+<anything>}` to stdout — see the contract docstring at the top of
+`core/watch_runner.py`. The one discipline that matters: fire only on a
+*delta* against your persisted state, not on every poll, or you've just
+rebuilt the spammy digest you were trying to avoid. And don't let a broken
+check silently look healthy — a watcher that errors should surface that,
+not go quiet.
+
 ## Adding a module
 
 1. `mkdir -p modules/<name>/{bin,prompts,reports,...}` — whatever data dirs
@@ -135,7 +168,9 @@ answer grounded in that + whatever module data `prompts/reply.md` points at.
    for delivery — don't duplicate the sender per module.
 4. Add your module's data paths to `prompts/reply.md`'s GROUNDING section so
    the listener knows to look there when answering questions about it.
-5. Schedule it (cron/launchd/systemd, whatever fits).
+5. (Optional) add a `modules/<name>/watchers/*.py` for anything that needs to
+   bypass your module's own schedule — see "Breaking-news alerts" above.
+6. Schedule it (cron/launchd/systemd, whatever fits).
 
 ## Security notes
 
