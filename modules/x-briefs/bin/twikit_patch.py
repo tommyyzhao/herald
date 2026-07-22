@@ -3,13 +3,26 @@ Runtime patches that make twikit work against X's current (mid-2026) defenses.
 
 Two problems, both patched here:
 
-1. x-client-transaction-id generation. twikit fetches X's homepage with the
-   logged-in session to derive the request signature, but (a) X 400s the
-   *authenticated* homepage even via a browser fingerprint, and (b) twikit's
-   regexes for the `ondemand.s` bundle broke when X moved to a webpack chunk
-   index (~2026-03-18; twikit issue #408, PRs #410/#411). The transaction key is
-   user-independent, so we fetch the homepage + ondemand bundle ANONYMOUSLY via
-   curl_cffi and compute the key from that, with the updated regexes.
+1. x-client-transaction-id generation. twikit's regexes for the `ondemand.s`
+   bundle broke when X moved to a webpack chunk index (~2026-03-18; twikit
+   issue #408, PRs #410/#411) — fixed by the updated regexes below.
+
+   A second, separate break (found 2026-07-21): X migrated its ANONYMOUS
+   logged-out landing page to a Vite/rolldown bundler (`__vite__mapDeps`,
+   `assets/*-<hash>.js`, served from `abs.twimg.com/x-web/x-web/`) — the
+   `ondemand.s` reference doesn't exist anywhere in that page or its chunks
+   at all anymore. But the AUTHENTICATED app (`x.com/` or `x.com/home` when
+   the request carries real session cookies) still serves the OLD
+   webpack-based bundle with `ondemand.s` intact — X has only migrated the
+   logged-out variant so far. So: fetch WITH the session's real cookies
+   attached, not anonymously. (twikit's own upstream `init()` already does
+   this via the passed-in authenticated `session` — our patch used to
+   deliberately go around it because the authenticated homepage 400'd via a
+   bare browser fingerprint; that's no longer true, or at least isn't via
+   curl_cffi carrying the actual cookie jar. If X starts 400ing this again,
+   the fallback is to keep the anonymous fetch but point at whatever new
+   endpoint still ships the legacy bundle — check `x.com/home` if `x.com/`
+   ever migrates too.)
 
 2. (Transport is swapped separately — see xtransport.CurlCffiTransport — because
    X fingerprint-blocks plain httpx.)
@@ -26,13 +39,19 @@ from twikit import user as _user_mod
 from twikit import tweet as _tweet_mod
 
 _ON_DEMAND_FILE_REGEX = re.compile(r',(\d+):["\']ondemand\.s["\']')
-_ON_DEMAND_HASH_PATTERN = r',{}:"([0-9a-f]+)"'
+_ON_DEMAND_HASH_PATTERN = r',{}:["\']([0-9a-f]+)["\']'
 _INDICES_REGEX = re.compile(r'\[(\d+)\],\s*16')
 
 
 async def _patched_init(self, session, headers):
-    """Build the transaction key from the ANONYMOUS homepage (user-independent)."""
+    """Build the transaction key from the AUTHENTICATED homepage — the
+    session's real cookies are required now (see module docstring); the
+    transaction key itself is still not tied to any specific request being
+    signed, just to a live, cookie-bearing session."""
+    cookies = dict(session.cookies) if hasattr(session, "cookies") else {}
     async with AsyncSession() as s:
+        if cookies:
+            s.cookies.update(cookies)
         html = (await s.get("https://x.com/", impersonate="chrome", timeout=30)).text
         soup = bs4.BeautifulSoup(html, "lxml")
         chunk = _ON_DEMAND_FILE_REGEX.search(html)
